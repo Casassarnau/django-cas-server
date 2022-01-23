@@ -10,6 +10,14 @@
 #
 # (c) 2015-2016 Valentin Samir
 """views for the app"""
+try:
+    from user.verification import check_client_ip
+except ImportError:
+    def check_client_ip(f):
+        def aux(*args, **kwargs):
+            return f(*args, **kwargs)
+        return aux
+
 from .default_settings import settings, SessionStore
 
 from django.shortcuts import render, redirect
@@ -447,6 +455,7 @@ class LoginView(View, LogoutMixin):
     USER_ALREADY_LOGGED = 4
     USER_AUTHENTICATED = 5
     USER_NOT_AUTHENTICATED = 6
+    USER_BLOCKED = 7
 
     def init_post(self, request):
         """
@@ -496,17 +505,25 @@ class LoginView(View, LogoutMixin):
             self.request.session['lt'] = self.request.session['lt']
             return True
 
+    @check_client_ip
     def post(self, request, *args, **kwargs):
         """
             method called on POST request on this view
 
             :param django.http.HttpRequest request: The current request object
         """
+        lt = self.request.session.get('lt', [])
         # initialize class parameters
         self.init_post(request)
         # process the POST request
         ret = self.process_post()
-        if ret == self.INVALID_LOGIN_TICKET:
+        if ret == self.USER_BLOCKED:
+
+            self.init_form(self.request.POST)
+            self.form.blocked = True
+            self.logout()
+            self.request.session['lt'] = lt
+        elif ret == self.INVALID_LOGIN_TICKET:
             messages.add_message(
                 self.request,
                 messages.ERROR,
@@ -566,6 +583,8 @@ class LoginView(View, LogoutMixin):
                   reauthentication and his credentials are valid
             :rtype: int
         """
+        if not getattr(self.request, 'client_req_is_valid', True):
+            return self.USER_BLOCKED
         if not self.check_lt():
             self.init_form(self.request.POST)
             logger.warning("Received an invalid login ticket")

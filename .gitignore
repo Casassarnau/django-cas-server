@@ -19,3 +19,4 @@ htmlcov/
 tox_logs/
 .cache/
 .eggs/
+.idea

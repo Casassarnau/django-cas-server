@@ -132,6 +132,8 @@ class UserCredential(BaseLogin):
         cleaned_data = super(UserCredential, self).clean()
         if "username" in cleaned_data and "password" in cleaned_data:
             auth = utils.import_attr(settings.CAS_AUTH_CLASS)(cleaned_data["username"])
+            if getattr(self, "blocked", False):
+                raise forms.ValidationError('Too many login attempts. Please try again in 5 minutes.')
             if auth.test_password(cleaned_data["password"]):
                 cleaned_data["username"] = auth.username
             else:
